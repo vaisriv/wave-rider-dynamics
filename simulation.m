@@ -32,7 +32,7 @@ predicted_cl = double(subs(cl_poly, {Mach, AoA}, new_data));
 aoa_min = -5; 
 aoa_max = 15;
 
-M = 10; % Initial mach number
+M = 0.8; % Initial mach number
 m = 25; %25 kg
 y = 40000;
 x = 0;
@@ -56,6 +56,8 @@ plotHandle = plot(x, y, 'bo');
 trajectoryX = x;
 trajectoryY = y;
 
+% Initialize the plot handle outside the loop
+h = plot(NaN, NaN, 'b-'); % Create an empty plot
 
 while y > 0
     [T, a, P, rho] = atmosisa(y, extended=true);
@@ -70,6 +72,7 @@ while y > 0
     cd_fun = @(aoa) double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
     obj_fun = @(aoa) - (cl_fun(aoa) ./ cd_fun(aoa));
     [aoa, fval] = fminbnd(obj_fun, aoa_min, aoa_max);
+    fprintf('Optimal AoA: %.2f degrees\n', aoa);
 
     proj_A = A * cos(aoa);
 
@@ -96,7 +99,8 @@ while y > 0
     trajectoryX = [trajectoryX, x];
     trajectoryY = [trajectoryY, y];
     
-    set(plotHandle, 'XData', trajectoryX, 'YData', trajectoryY);
+    % Update the plot data
+    set(h, 'XData', trajectoryX, 'YData', trajectoryY);
     drawnow;
 end
 
