@@ -73,11 +73,14 @@ while y > 0
     obj_fun = @(aoa) - (cl_fun(aoa) ./ cd_fun(aoa));
     [aoa, fval] = fminbnd(obj_fun, aoa_min, aoa_max);
     fprintf('Optimal AoA: %.2f degrees\n', aoa);
+    fprintf('Mach Number: %.2f\n', M);
 
-    proj_A = A * cos(aoa);
+    proj_A = A * cosd(aoa);
 
     cl = double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
     cd = double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
+    fprintf('Lift Coefficient (C_l): %.4f\n', cl);
+    fprintf('Drag Coefficient (C_d): %.4f\n', cd);
     
     L = cl * rho * v^2 * proj_A;
     Lx = - L * vx/v;
@@ -87,7 +90,15 @@ while y > 0
     Dx = - D * vx/v;
     Dy = - D * vy/v;
 
+    fprintf('Lift (L): %.2f N\n', L);
+    fprintf('Drag (D): %.2f N\n', D);
+    fprintf('Air Density (rho): %.2f kg/m^3\n', rho);
+    fprintf('Velocity (v): %.2f m/s\n', v^2);
+    fprintf('Projected Area (proj_A): %.2f m^2\n', proj_A);
     Fx = Dx+Lx - P/M * back_area;
+    fprintf('Fx: %.2f N\n', Fx);
+
+    fprintf('----------------------------------------\n');
     Fy = Ly + Dy -m*g;
 
     vx = vx + (Fx/m)*dt;
