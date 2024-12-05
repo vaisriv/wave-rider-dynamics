@@ -7,13 +7,13 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 # Load the data
 # Replace 'aerodynamic_data.csv' with the path to your file
-data = pd.read_csv('aerodynamic_data.csv')
+data = pd.read_csv('Aerodynamics_data.csv')
 data.dropna(inplace=True)
 
 # Extract features (Mach number and angle of attack) and targets (C_l and C_d)
-X = data[['Mach', 'AoA']].values
-y_cl = data['C_l'].values
-y_cd = data['C_d'].values
+X = data[['Mach', 'AOA']].values
+y_cl = data['Lift'].values
+y_cd = data['Drag'].values
 
 # Split the data into training and testing sets for both targets
 X_train, X_test, y_cl_train, y_cl_test = train_test_split(X, y_cl, test_size=0.2, random_state=42)
@@ -65,8 +65,8 @@ model_cl = perform_regression(X_train_poly, y_cl_train, X_test_poly, y_cl_test, 
 # Perform regression for C_d
 model_cd = perform_regression(X_train_poly, y_cd_train, X_test_poly, y_cd_test, 'C_d')
 
-mach = 0.8
-aoa = 5.0
+mach = 5
+aoa = 3
 input_data = np.array([[mach, aoa]])
 input_data_poly = poly.transform(input_data)
 

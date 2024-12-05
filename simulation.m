@@ -29,10 +29,10 @@ predicted_cl = double(subs(cl_poly, {Mach, AoA}, new_data));
 
 % This is the simulation file for the 2D projectile motion simulation
 
-aoa_min = -5; 
+aoa_min = 0; 
 aoa_max = 15;
 
-M = 0.8; % Initial mach number
+M = 10; % Initial mach number
 m = 25; %25 kg
 y = 40000;
 x = 0;
@@ -62,7 +62,7 @@ h = plot(NaN, NaN, 'b-'); % Create an empty plot
 while y > 0
     [T, a, P, rho] = atmosisa(y, extended=true);
 
-    v = calc_v(vx,vy);
+    v = sqrt(vx^2 + vy^2);
     M = v/a;
 
     % Define the lift coefficient function as a function of AoA
@@ -75,38 +75,40 @@ while y > 0
     fprintf('Optimal AoA: %.2f degrees\n', aoa);
     fprintf('Mach Number: %.2f\n', M);
 
-    proj_A = A * cosd(aoa);
+    L = double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
+    D = double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
+    fprintf('Lift: %.4f\n', L);
+    fprintf('Drag: %.4f\n', D);
 
-    cl = double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
-    cd = double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
-    fprintf('Lift Coefficient (C_l): %.4f\n', cl);
-    fprintf('Drag Coefficient (C_d): %.4f\n', cd);
-    
-    L = cl * rho * v^2 * proj_A;
-    Lx = - L * vx/v;
-    Ly = L * vy/v;
+    Lx = L * vx/v;
+    Ly = -L * vy/v;
 
-    D = cd * rho * v^2 * proj_A;
     Dx = - D * vx/v;
     Dy = - D * vy/v;
 
     fprintf('Lift (L): %.2f N\n', L);
     fprintf('Drag (D): %.2f N\n', D);
-    fprintf('Air Density (rho): %.2f kg/m^3\n', rho);
-    fprintf('Velocity (v): %.2f m/s\n', v^2);
-    fprintf('Projected Area (proj_A): %.2f m^2\n', proj_A);
-    Fx = Dx+Lx - P/M * back_area;
-    fprintf('Fx: %.2f N\n', Fx);
-
-    fprintf('----------------------------------------\n');
+    fprintf('Lx: %.2f N, Ly: %.2f N\n', Lx, Ly);
+    fprintf('Air Density (rho): %.5f kg/m^3\n', rho);
+    fprintf('Velocity (v): %.2f m/s\n', v);
+    
+    Fx = Dx+Lx;
     Fy = Ly + Dy -m*g;
+    fprintf('Fx: %.2f N, Fy: %.2f N\n', Fx, Fy);
+    fprintf('vx: %.2f m/s, vy: %.2f m/s\n', vx, vy);
 
     vx = vx + (Fx/m)*dt;
     vy = vy + (Fy/m)*dt;
 
     x = x + vx*dt;
     y = y + vy*dt;
+
+    fprintf('----------------------------------------\n');
+
+
+ 
     
+
     trajectoryX = [trajectoryX, x];
     trajectoryY = [trajectoryY, y];
     
