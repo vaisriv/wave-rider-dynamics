@@ -68,10 +68,15 @@ while y > 0
     % Define the lift coefficient function as a function of AoA
     cl_fun = @(aoa) double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
 
-    % Define the drag coefficient function as a function of AoA
-    cd_fun = @(aoa) double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
-    obj_fun = @(aoa) - (cl_fun(aoa) ./ cd_fun(aoa));
-    [aoa, fval] = fminbnd(obj_fun, aoa_min, aoa_max);
+    if y < 35000
+        aoa = aoa_max;
+    else
+        % Define the drag coefficient function as a function of AoA
+        cd_fun = @(aoa) double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
+        obj_fun = @(aoa) - (cl_fun(aoa) ./ cd_fun(aoa));
+        [aoa, fval] = fminbnd(obj_fun, aoa_min, aoa_max);
+    end
+
     fprintf('Optimal AoA: %.2f degrees\n', aoa);
     fprintf('Mach Number: %.2f\n', M);
 
@@ -80,8 +85,8 @@ while y > 0
     fprintf('Lift: %.4f\n', L);
     fprintf('Drag: %.4f\n', D);
 
-    Lx = L * vx/v;
-    Ly = -L * vy/v;
+    Lx = -L * vy / v;
+    Ly = L * vx / v;
 
     Dx = - D * vx/v;
     Dy = - D * vy/v;
