@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 # Load the data
 # Replace 'aerodynamic_data.csv' with the path to your file
-data = pd.read_csv('Aerodynamics_data.csv')
+data = pd.read_csv('Aerodynamics_data-VAI.csv')
 data.dropna(inplace=True)
 
 # Extract features (Mach number and angle of attack) and targets (C_l and C_d)
@@ -20,7 +20,7 @@ X_train, X_test, y_cl_train, y_cl_test = train_test_split(X, y_cl, test_size=0.2
 _, _, y_cd_train, y_cd_test = train_test_split(X, y_cd, test_size=0.2, random_state=42)
 
 # Define the polynomial degree
-degree = 3
+degree = 4
 
 # Create polynomial features
 poly = PolynomialFeatures(degree=degree, include_bias=False)

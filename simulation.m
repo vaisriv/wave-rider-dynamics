@@ -26,7 +26,6 @@ new_data = [0.8, 5.0]; % Example: Mach 0.8, AoA 5 degrees
 predicted_cd = double(subs(cd_poly, {Mach, AoA}, new_data));
 predicted_cl = double(subs(cl_poly, {Mach, AoA}, new_data));
 
-
 % This is the simulation file for the 2D projectile motion simulation
 
 aoa_min = 0; 
@@ -36,7 +35,7 @@ M = 10; % Initial mach number
 m = 25; %25 kg
 y = 40000;
 x = 0;
-[T, a, P, rho] = atmosisa(y, extended=true);
+[T, a, P, rho] = atmosisa(y, 'extended', true);
 
 A = 2; % Surface area
 back_area = 0.028; %m^2
@@ -45,13 +44,13 @@ vx = M*a;
 vy = 0;
 
 g = 9.81;
-dt = 0.1;
+dt = 1;
 
 figure;
 hold on;
 xlabel('X Position');
 ylabel('Y Position');
-title('2D Projectile Motion');
+title('Waverider Trajectory Simulation');
 plotHandle = plot(x, y, 'bo');
 trajectoryX = x;
 trajectoryY = y;
@@ -59,48 +58,72 @@ trajectoryY = y;
 % Initialize the plot handle outside the loop
 h = plot(NaN, NaN, 'b-'); % Create an empty plot
 
+last_saved_x = x;
+min_v = -100;
+maax_v = 40;
+
+trigger = false;
+
+aoa = 0;
+
+lift_threshold = 20;
+
+% Initialize arrays to store AoA and Mach during simulation
+aoa_history = [];
+M_history = [];
+
 while y > 0
-    [T, a, P, rho] = atmosisa(y, extended=true);
+    [T, a, P, rho] = atmosisa(y, 'extended', true);
 
     v = sqrt(vx^2 + vy^2);
     M = v/a;
 
-    % Define the lift coefficient function as a function of AoA
-    cl_fun = @(aoa) double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
+    L = @(aoa) double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
+    D = @(aoa) double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
 
-    if y < 35000
-        aoa = aoa_max;
+    if vy < min_v && vy > min_v*1.2
+        trigger = true;
+    end
+    
+    if vy > maax_v
+        trigger = false;
+    end
+
+    L_min = m*g+lift_threshold;
+
+    if trigger
+        % Define the objective function (maximize L/D, so minimize -L/D)
+        obj_fun = @(aoa) -L(aoa) / D(aoa);
+
+        % Define the nonlinear constraint
+        % Ensure L(aoa) >= L_min
+        nonlcon = @(aoa) deal([], L(aoa) - L_min); % No equality constraint, inequality only
+
+        % Initial guess for aoa
+        aoa0 = (aoa_min + aoa_max) / 2; 
+
+        % Set options for fmincon
+        options = optimoptions('fmincon', 'Display', 'iter', 'Algorithm', 'sqp'); 
+
+        % Call fmincon to optimize
+        [aoa, fval] = fmincon(obj_fun, aoa0, [], [], [], [], aoa_min, aoa_max, nonlcon, options);
     else
-        % Define the drag coefficient function as a function of AoA
-        cd_fun = @(aoa) double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
-        obj_fun = @(aoa) - (cl_fun(aoa) ./ cd_fun(aoa));
+        obj_fun = @(aoa) -(L(aoa) / D(aoa));
         [aoa, fval] = fminbnd(obj_fun, aoa_min, aoa_max);
     end
 
-    fprintf('Optimal AoA: %.2f degrees\n', aoa);
-    fprintf('Mach Number: %.2f\n', M);
+    % Recompute L and D with the chosen AoA
+    L_val = double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
+    D_val = double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
 
-    L = double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
-    D = double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
-    fprintf('Lift: %.4f\n', L);
-    fprintf('Drag: %.4f\n', D);
+    Lx = -L_val * vy / v;
+    Ly = L_val * vx / v;
 
-    Lx = -L * vy / v;
-    Ly = L * vx / v;
+    Dx = - D_val * vx/v;
+    Dy = - D_val * vy/v;
 
-    Dx = - D * vx/v;
-    Dy = - D * vy/v;
-
-    fprintf('Lift (L): %.2f N\n', L);
-    fprintf('Drag (D): %.2f N\n', D);
-    fprintf('Lx: %.2f N, Ly: %.2f N\n', Lx, Ly);
-    fprintf('Air Density (rho): %.5f kg/m^3\n', rho);
-    fprintf('Velocity (v): %.2f m/s\n', v);
-    
     Fx = Dx+Lx;
     Fy = Ly + Dy -m*g;
-    fprintf('Fx: %.2f N, Fy: %.2f N\n', Fx, Fy);
-    fprintf('vx: %.2f m/s, vy: %.2f m/s\n', vx, vy);
 
     vx = vx + (Fx/m)*dt;
     vy = vy + (Fy/m)*dt;
@@ -108,22 +131,52 @@ while y > 0
     x = x + vx*dt;
     y = y + vy*dt;
 
-    fprintf('----------------------------------------\n');
+    % Store AoA and Mach in history arrays
+    aoa_history = [aoa_history, aoa];
+    M_history = [M_history, M];
 
+    if abs(x - last_saved_x) > 1000
+        trajectoryX = [trajectoryX, x];
+        trajectoryY = [trajectoryY, y];
+        last_saved_x = x;
 
- 
-    
+        % Print information
+        fprintf('Optimal AoA: %.2f degrees\n', aoa);
+        fprintf('Mach Number: %.2f\n', M);
+        fprintf('Lift: %.4f\n', L_val);
+        fprintf('Drag: %.4f\n', D_val);
+        fprintf('Lift (L): %.2f N\n', L_val);
+        fprintf('Drag (D): %.2f N\n', D_val);
+        fprintf('Lx: %.2f N, Ly: %.2f N\n', Lx, Ly);
+        fprintf('Air Density (rho): %.5f kg/m^3\n', rho);
+        fprintf('Velocity (v): %.2f m/s\n', v);
+        fprintf('Fx: %.2f N, Fy: %.2f N\n', Fx, Fy);
+        fprintf('vx: %.2f m/s, vy: %.2f m/s\n', vx, vy);
+        fprintf('Trigger: %d\n', trigger);
+        fprintf('----------------------------------------\n');
 
-    trajectoryX = [trajectoryX, x];
-    trajectoryY = [trajectoryY, y];
-    
-    % Update the plot data
-    set(h, 'XData', trajectoryX, 'YData', trajectoryY);
-    drawnow;
+        % Update the plot data
+        set(h, 'XData', trajectoryX, 'YData', trajectoryY);
+        drawnow;
+    end
 end
+
+fprintf('Final X Position: %.2f kilometers\n', x/1000);
 
 hold off;
 
+% After the simulation, plot the distributions of AoA and Mach
+figure;
+histogram(aoa_history);
+xlabel('Angle of Attack (degrees)');
+ylabel('Frequency');
+title('Distribution of AoA During Flight');
+
+figure;
+histogram(M_history);
+xlabel('Mach Number');
+ylabel('Frequency');
+title('Distribution of Mach Number During Flight');
 
 function poly = construct_symbolic_poly(coeffTable, Mach, AoA)
     % Initialize the polynomial
@@ -164,8 +217,4 @@ function poly = construct_symbolic_poly(coeffTable, Mach, AoA)
         % Add the term to the polynomial
         poly = poly + term;
     end
-end
-
-function v = calc_v(vx,vy)
-    v = sqrt(vx^2 + vy^2);
 end
