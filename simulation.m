@@ -66,8 +66,6 @@ trigger = false;
 
 aoa = 0;
 
-lift_threshold = 20;
-
 % Initialize arrays to store AoA and Mach during simulation
 aoa_history = [];
 M_history = [];
@@ -78,43 +76,12 @@ while y > 0
     v = sqrt(vx^2 + vy^2);
     M = v/a;
 
-    L = @(aoa) double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
-    D = @(aoa) double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
-
-    if vy < min_v && vy > min_v*1.2
-        trigger = true;
-    end
-    
-    if vy > maax_v
-        trigger = false;
-    end
-
-    L_min = m*g+lift_threshold;
-
-    if trigger
-        % Define the objective function (maximize L/D, so minimize -L/D)
-        obj_fun = @(aoa) -L(aoa) / D(aoa);
-
-        % Define the nonlinear constraint
-        % Ensure L(aoa) >= L_min
-        nonlcon = @(aoa) deal([], L(aoa) - L_min); % No equality constraint, inequality only
-
-        % Initial guess for aoa
-        aoa0 = (aoa_min + aoa_max) / 2; 
-
-        % Set options for fmincon
-        options = optimoptions('fmincon', 'Display', 'iter', 'Algorithm', 'sqp'); 
-
-        % Call fmincon to optimize
-        [aoa, fval] = fmincon(obj_fun, aoa0, [], [], [], [], aoa_min, aoa_max, nonlcon, options);
-    else
-        obj_fun = @(aoa) -(L(aoa) / D(aoa));
-        [aoa, fval] = fminbnd(obj_fun, aoa_min, aoa_max);
-    end
+    L = @(aoa) double(subs(cl_poly, {Mach, AoA}, [M, aoa]))*rho;
+    D = @(aoa) double(subs(cd_poly, {Mach, AoA}, [M, aoa]))*rho;
 
     % Recompute L and D with the chosen AoA
-    L_val = double(subs(cl_poly, {Mach, AoA}, [M, aoa]));
-    D_val = double(subs(cd_poly, {Mach, AoA}, [M, aoa]));
+    L_val = double(subs(cl_poly, {Mach, AoA}, [M, aoa]))*rho;
+    D_val = double(subs(cd_poly, {Mach, AoA}, [M, aoa]))*rho;
 
     Lx = -L_val * vy / v;
     Ly = L_val * vx / v;

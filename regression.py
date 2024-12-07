@@ -5,6 +5,9 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 
+# Atm. data at y = 40km
+rho = 0.0039
+
 # Load the data
 # Replace 'aerodynamic_data.csv' with the path to your file
 data = pd.read_csv('Aerodynamics_data-VAI.csv')
@@ -12,8 +15,8 @@ data.dropna(inplace=True)
 
 # Extract features (Mach number and angle of attack) and targets (C_l and C_d)
 X = data[['Mach', 'AOA']].values
-y_cl = data['Lift'].values
-y_cd = data['Drag'].values
+y_cl = (data['Lift'].values)/rho
+y_cd = (data['Drag'].values)/rho
 
 # Split the data into training and testing sets for both targets
 X_train, X_test, y_cl_train, y_cl_test = train_test_split(X, y_cl, test_size=0.2, random_state=42)
