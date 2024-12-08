@@ -1,11 +1,23 @@
-% Trial Directory
+% Clear history
+clear;
+clc;
+
+% Set LaTeX as Interpreter for text labels
+list_factory = fieldnames(get(groot,'factory'));
+index_interpreter = find(contains(list_factory,'Interpreter'));
+for i = 1:length(index_interpreter)
+    default_name = strrep(list_factory{index_interpreter(i)},'factory','default');
+    set(groot, default_name,'latex');
+end
+
+% Trial Directories
 trial_dirs = [
     './trial1/';
     './trial2/';
     './trial3/';
     './trial4/';
 ];
-trial_num = 4;
+trial_num = 1;
 
 % Read the CSV files into tables
 cd_coeffTable = readtable([trial_dirs(trial_num, :) 'C_d_Regression.csv']);
@@ -23,12 +35,12 @@ cl_cd_poly = cl_poly/cd_poly;
 aoa_linsp = linspace(0, 15, 31);
 cl_cd_mach_poly = subs(cl_cd_poly, AoA, aoa_linsp);
 
-% This is the simulation file for the 2D projectile motion simulation
-
+% Intial Conditions
 M = 10; % Initial mach number
 m = 25; %25 kg
 y = 40000;
 x = 0;
+aoa = 0;
 [T, a, P, rho] = atmosisa(y, 'extended', true);
 
 A = 2; % Surface area
@@ -48,34 +60,43 @@ dt = 1;
 trajectory_plot = figure;
 hold on;
 xlabel('X Position');
+
+yyaxis left; % put trajectory on left
+traj_plt = plot(NaN, NaN, 'b-'); % Empty plot for trajectory
 ylabel('Y Position');
+ylim([0 4.5e4]);
+
+yyaxis right; % put mach on right
+mach_plt = plot(NaN, NaN, 'r-'); % Empty plot for mach number
+ylabel('Mach Number');
+ylim([0 11]);
+
 title('Waverider Trajectory Simulation');
 plotHandle = plot(x, y, 'bo');
+
+% initial simulation state
 trajectoryX = x;
 trajectoryY = y;
-
-% Initialize the plot handle outside the loop
-h = plot(NaN, NaN, 'b-'); % Create an empty plot
+M_history = M;
+aoa_history = aoa;
 
 last_saved_x = x;
 
-aoa = 0;
-
-% Initialize arrays to store AoA and Mach during simulation
-aoa_history = [];
-M_history = [];
+% cutoff height for when mach number is low enough that shock is weak and it is time to glide
+glide_cutoff = 2.5e4;
 
 while y > 0
-    if y > 2.5e4
+
+    if y > glide_cutoff
         [T, a, P, rho] = atmosisa(y, 'extended', true);
     else
-        [T, a, P, rho] = atmosisa(2.5e4, 'extended', true);
+        [T, a, P, rho] = atmosisa(glide_cutoff, 'extended', true);
     end
 
     v = sqrt(vx^2 + vy^2);
     M = v/a;
 
-    if x == 0 || y < 2.5e4
+    if x == 0 || y < glide_cutoff
         aoa = 0;
         L = double(subs(cl_poly, [Mach AoA], [M aoa])*rho);
         D = double(subs(cd_poly, [Mach AoA], [M aoa])*rho)+P/M*back_areas(trial_num);
@@ -103,13 +124,13 @@ while y > 0
     aoa_history = [aoa_history, aoa];
     M_history = [M_history, M];
 
-
     trajectoryX = [trajectoryX, x];
     trajectoryY = [trajectoryY, y];
     last_saved_x = x;
     
     % Update the plot data
-    set(h, 'XData', trajectoryX, 'YData', trajectoryY);
+    set(traj_plt, 'XData', trajectoryX, 'YData', trajectoryY);
+    set(mach_plt, 'XData', trajectoryX, 'YData', M_history);
     drawnow;
 
     if abs(x - last_saved_x) > 1000
@@ -118,17 +139,19 @@ while y > 0
         fprintf('Mach Number: %.2f\n', M);
         fprintf('Lift: %.4f\n', L);
         fprintf('Drag: %.4f\n', D);
-        fprintf('C_L/C_D: %.4f\n', cl_cd);
-        fprintf('Lx: %.2f N, Ly: %.2f N\n', Lx, Ly);
-        fprintf('Air Density (rho): %.5f kg/m^3\n', rho);
+        fprintf('$\frac{C_L}{C_D}$: %.4f\n', cl_cd);
+        fprintf('$L_x$: %.2f N, $L_y$: %.2f N\n', Lx, Ly);
+        fprintf('Air Density ($\rho$): %.5f kg/m^3\n', rho);
         fprintf('Velocity (v): %.2f m/s\n', v);
-        fprintf('Fx: %.2f N, Fy: %.2f N\n', Fx, Fy);
-        fprintf('vx: %.2f m/s, vy: %.2f m/s\n', vx, vy);
+        fprintf('$F_x$: %.2f N, $F_y$: %.2f N\n', Fx, Fy);
+        fprintf('$v_x$: %.2f m/s, $v_y$: %.2f m/s\n', vx, vy);
         fprintf('----------------------------------------\n');
     end
 end
 
 fprintf('Final X Position: %.2f kilometers\n', x/1000);
+set(mach_plt, 'XData', trajectoryX, 'YData', M_history);
+drawnow;
 
 saveas(trajectory_plot, [trial_dirs(trial_num, :) 'trajectory.png']);
 hold off;
