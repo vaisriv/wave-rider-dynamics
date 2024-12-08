@@ -8,9 +8,11 @@ from sklearn.metrics import mean_squared_error, r2_score
 # Atm. data at y = 40km
 rho = 0.0039
 
+# Trial data directory
+trial_dir = './trial4'
+
 # Load the data
-# Replace 'aerodynamic_data.csv' with the path to your file
-data = pd.read_csv('Aerodynamics_data-VAI.csv')
+data = pd.read_csv(f'{trial_dir}/CFD_Data.csv')
 data.dropna(inplace=True)
 
 # Extract features (Mach number and angle of attack) and targets (C_l and C_d)
@@ -56,7 +58,7 @@ def perform_regression(X_train_poly, y_train, X_test_poly, y_test, target_name):
     })
 
     # Save coefficients to a CSV file
-    file_name = f'{target_name}_regression_coefficients.csv'
+    file_name = f'{trial_dir}/{target_name}_Regression.csv'
     coefficients.to_csv(file_name, index=False)
     print(f"Coefficients saved to {file_name}")
 

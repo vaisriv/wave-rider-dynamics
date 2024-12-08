@@ -1,35 +1,29 @@
-% Specify the path to your CSV files
-cd_regression_coefficients = 'C_d_regression_coefficients.csv';
-cl_regression_coefficients = 'C_l_regression_coefficients.csv';
+% Trial Directory
+trial_dirs = [
+    './trial1/';
+    './trial2/';
+    './trial3/';
+    './trial4/';
+];
+trial_num = 4;
 
 % Read the CSV files into tables
-cd_coeffTable = readtable(cd_regression_coefficients);
-cl_coeffTable = readtable(cl_regression_coefficients);
+cd_coeffTable = readtable([trial_dirs(trial_num, :) 'C_d_Regression.csv']);
+cl_coeffTable = readtable([trial_dirs(trial_num, :) 'C_l_Regression.csv']);
 
 % Create symbolic variables for Mach and AoA
 syms Mach AoA
 
-% Generate symbolic polynomial for C_d
+% Generate symbolic polynomial for C_d, C_l, and C_l/C_d
 cd_poly = construct_symbolic_poly(cd_coeffTable, Mach, AoA);
-fprintf('Symbolic Polynomial for C_d:\n');
-disp(cd_poly);
-
-% Generate symbolic polynomial for C_l
 cl_poly = construct_symbolic_poly(cl_coeffTable, Mach, AoA);
-fprintf('Symbolic Polynomial for C_l:\n');
-disp(cl_poly);
+cl_cd_poly = cl_poly/cd_poly;
 
-% Define new input data (Mach, AoA)
-new_data = [0.8, 5.0]; % Example: Mach 0.8, AoA 5 degrees
-
-% Calculate values of the polynomials at given inputs
-predicted_cd = double(subs(cd_poly, {Mach, AoA}, new_data));
-predicted_cl = double(subs(cl_poly, {Mach, AoA}, new_data));
+% Generate C_l/C_d for all AoA
+aoa_linsp = linspace(0, 15, 31);
+cl_cd_mach_poly = subs(cl_cd_poly, AoA, aoa_linsp);
 
 % This is the simulation file for the 2D projectile motion simulation
-
-aoa_min = 0; 
-aoa_max = 15;
 
 M = 10; % Initial mach number
 m = 25; %25 kg
@@ -38,7 +32,12 @@ x = 0;
 [T, a, P, rho] = atmosisa(y, 'extended', true);
 
 A = 2; % Surface area
-back_area = 0.028; %m^2
+back_areas = [
+    0.028;
+    0.030;
+    0.030;
+    0.0298;
+]; %m^2
 
 vx = M*a;
 vy = 0;
@@ -46,7 +45,7 @@ vy = 0;
 g = 9.81;
 dt = 1;
 
-figure;
+trajectory_plot = figure;
 hold on;
 xlabel('X Position');
 ylabel('Y Position');
@@ -59,10 +58,6 @@ trajectoryY = y;
 h = plot(NaN, NaN, 'b-'); % Create an empty plot
 
 last_saved_x = x;
-min_v = -100;
-maax_v = 40;
-
-trigger = false;
 
 aoa = 0;
 
@@ -71,23 +66,29 @@ aoa_history = [];
 M_history = [];
 
 while y > 0
-    [T, a, P, rho] = atmosisa(y, 'extended', true);
+    if y > 2.5e4
+        [T, a, P, rho] = atmosisa(y, 'extended', true);
+    else
+        [T, a, P, rho] = atmosisa(2.5e4, 'extended', true);
+    end
 
     v = sqrt(vx^2 + vy^2);
     M = v/a;
 
-    L = @(aoa) double(subs(cl_poly, {Mach, AoA}, [M, aoa]))*rho;
-    D = @(aoa) double(subs(cd_poly, {Mach, AoA}, [M, aoa]))*rho;
+    if x == 0 || y < 2.5e4
+        aoa = 0;
+        L = double(subs(cl_poly, [Mach AoA], [M aoa])*rho);
+        D = double(subs(cd_poly, [Mach AoA], [M aoa])*rho)+P/M*back_areas(trial_num);
+        cl_cd = L/D;
+    else
+        [aoa, L, D, cl_cd] = getMaxCLCD(aoa_linsp, cl_cd_mach_poly, cl_poly, cd_poly, Mach, AoA, M, rho, P, back_areas(trial_num));
+    end
 
-    % Recompute L and D with the chosen AoA
-    L_val = double(subs(cl_poly, {Mach, AoA}, [M, aoa]))*rho;
-    D_val = double(subs(cd_poly, {Mach, AoA}, [M, aoa]))*rho;
+    Lx = -L * vy / v;
+    Ly = L * vx / v;
 
-    Lx = -L_val * vy / v;
-    Ly = L_val * vx / v;
-
-    Dx = - D_val * vx/v;
-    Dy = - D_val * vy/v;
+    Dx = - D * vx/v;
+    Dy = - D * vy/v;
 
     Fx = Dx+Lx;
     Fy = Ly + Dy -m*g;
@@ -102,36 +103,37 @@ while y > 0
     aoa_history = [aoa_history, aoa];
     M_history = [M_history, M];
 
-    if abs(x - last_saved_x) > 1000
-        trajectoryX = [trajectoryX, x];
-        trajectoryY = [trajectoryY, y];
-        last_saved_x = x;
 
+    trajectoryX = [trajectoryX, x];
+    trajectoryY = [trajectoryY, y];
+    last_saved_x = x;
+    
+    % Update the plot data
+    set(h, 'XData', trajectoryX, 'YData', trajectoryY);
+    drawnow;
+
+    if abs(x - last_saved_x) > 1000
         % Print information
-        fprintf('Optimal AoA: %.2f degrees\n', aoa);
+        fprintf('AoA: %.2f degrees\n', aoa);
         fprintf('Mach Number: %.2f\n', M);
-        fprintf('Lift: %.4f\n', L_val);
-        fprintf('Drag: %.4f\n', D_val);
-        fprintf('Lift (L): %.2f N\n', L_val);
-        fprintf('Drag (D): %.2f N\n', D_val);
+        fprintf('Lift: %.4f\n', L);
+        fprintf('Drag: %.4f\n', D);
+        fprintf('C_L/C_D: %.4f\n', cl_cd);
         fprintf('Lx: %.2f N, Ly: %.2f N\n', Lx, Ly);
         fprintf('Air Density (rho): %.5f kg/m^3\n', rho);
         fprintf('Velocity (v): %.2f m/s\n', v);
         fprintf('Fx: %.2f N, Fy: %.2f N\n', Fx, Fy);
         fprintf('vx: %.2f m/s, vy: %.2f m/s\n', vx, vy);
-        fprintf('Trigger: %d\n', trigger);
         fprintf('----------------------------------------\n');
-
-        % Update the plot data
-        set(h, 'XData', trajectoryX, 'YData', trajectoryY);
-        drawnow;
     end
 end
 
 fprintf('Final X Position: %.2f kilometers\n', x/1000);
 
+saveas(trajectory_plot, [trial_dirs(trial_num, :) 'trajectory.png']);
 hold off;
 
+%{
 % After the simulation, plot the distributions of AoA and Mach
 figure;
 histogram(aoa_history);
@@ -144,6 +146,7 @@ histogram(M_history);
 xlabel('Mach Number');
 ylabel('Frequency');
 title('Distribution of Mach Number During Flight');
+%}
 
 function poly = construct_symbolic_poly(coeffTable, Mach, AoA)
     % Initialize the polynomial
@@ -184,4 +187,12 @@ function poly = construct_symbolic_poly(coeffTable, Mach, AoA)
         % Add the term to the polynomial
         poly = poly + term;
     end
+end
+
+function [aoa, L, D, cl_cd] = getMaxCLCD(aoa_linsp, cl_cd_mach_poly, cl_poly, cd_poly, Mach, AoA, M, rho, P, back_area)
+    [cl_cd, i] = max(subs(cl_cd_mach_poly, Mach, M));
+    cl_cd = double(cl_cd);
+    aoa = aoa_linsp(i);
+    L = double(subs(cl_poly, [Mach AoA], [M aoa])*rho);
+    D = double(subs(cd_poly, [Mach AoA], [M aoa])*rho)+P/M*back_area;
 end
