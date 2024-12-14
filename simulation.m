@@ -120,9 +120,9 @@ while y > 0
     x = x + vx*dt;
     y = y + vy*dt;
 
-    % Store AoA and Mach in history arrays
-    aoa_history = [aoa_history, aoa];
+    % Store Mach and AoA in history arrays
     M_history = [M_history, M];
+    aoa_history = [aoa_history, aoa];
 
     trajectoryX = [trajectoryX, x];
     trajectoryY = [trajectoryY, y];
